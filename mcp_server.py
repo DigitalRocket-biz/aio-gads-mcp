@@ -705,6 +705,28 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="create_ad_like_successful_pattern",
+            description="Create a responsive search ad using the exact successful pattern from previous campaigns",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "Google Ads customer ID"
+                    },
+                    "ad_group_resource_name": {
+                        "type": "string",
+                        "description": "Ad group resource name where the ad will be created"
+                    },
+                    "business_name": {
+                        "type": "string",
+                        "description": "Business name to use in headlines (defaults to 'BizExplorer')"
+                    }
+                },
+                "required": ["customer_id", "ad_group_resource_name"]
+            }
+        ),
+        types.Tool(
             name="get_smart_recommendations", 
             description="Get AI-powered recommendations based on successful patterns and account context",
             inputSchema={
@@ -838,6 +860,12 @@ async def handle_call_tool(
                 final_urls=arguments["final_urls"],
                 path1=arguments.get("path1"),
                 path2=arguments.get("path2")
+            )
+        elif name == "create_ad_like_successful_pattern":
+            result = await create_ad_like_successful_pattern(
+                customer_id=arguments["customer_id"],
+                ad_group_resource_name=arguments["ad_group_resource_name"],
+                business_name=arguments.get("business_name", "BizExplorer")
             )
         elif name == "get_smart_recommendations":
             result = await get_smart_recommendations(
@@ -1569,7 +1597,7 @@ async def create_responsive_search_ad(customer_id: str, ad_group_resource_name: 
     
     # Use ROOT_MCC if accessing child account
     login_customer_id = ROOT_MCC if customer_id != ROOT_MCC else None
-    result = make_google_ads_request(f"customers/{customer_id}/adGroupAds:mutate", data, "POST", login_customer_id)
+    result = make_google_ads_request(f"customers/{customer_id}/adGroupAds:mutate", data, "POST", login_customer_id, "ad_creation")
     
     # Log successful creations
     if not result.get("error") and result.get("results"):
@@ -1587,7 +1615,8 @@ async def create_responsive_search_ad(customer_id: str, ad_group_resource_name: 
             }
         )
     
-    return {
+    # Enhanced error reporting for debugging
+    response_data = {
         "customer_id": customer_id,
         "ad_group_resource_name": ad_group_resource_name,
         "headlines_count": len(final_headlines),
@@ -1599,6 +1628,62 @@ async def create_responsive_search_ad(customer_id: str, ad_group_resource_name: 
         "result": result.get("results", []),
         "error": result.get("error")
     }
+    
+    # Add debugging info if there's an error
+    if result.get("error"):
+        # Look up successful ad creation patterns
+        successful_ads = [entry for entry in api_logger._load_log() if entry.get("operation_type") == "ad_creation" and entry.get("success")]
+        
+        response_data["debug_info"] = {
+            "ad_data_sent": ad_data,
+            "data_structure": data,
+            "successful_patterns_count": len(successful_ads),
+            "recent_successful_ad": successful_ads[-1] if successful_ads else None,
+            "suggestion": "Use 'create_ad_like_successful_pattern' tool instead - it replicates the exact structure that worked before",
+            "alternative_approach": f"Try: create_ad_like_successful_pattern(customer_id='{customer_id}', ad_group_resource_name='{ad_group_resource_name}')"
+        }
+    
+    return response_data
+
+async def create_ad_like_successful_pattern(customer_id: str, ad_group_resource_name: str, business_name: str = "BizExplorer") -> dict[str, Any]:
+    """Create a responsive search ad using the exact successful pattern from API log"""
+    
+    # Exact pattern that worked before (from lines 708-778 in API log)
+    headlines = [
+        f"{business_name} Services",
+        "Business Solutions", 
+        "Expert Consulting",
+        "Professional Services",
+        "Business Growth",
+        "Strategic Planning",
+        "Business Development",
+        "Expert Guidance",
+        "Quality Solutions",
+        "Trusted Partners",
+        "Results Driven",
+        "Proven Success",
+        "Industry Leaders", 
+        "Excellence Delivered",
+        "Your Success Partner"
+    ]
+    
+    descriptions = [
+        f"Professional business consulting and management services to help your company grow and succeed.",
+        f"Expert guidance and solutions for all your business needs. Contact us today for a consultation!",
+        f"Transform your business with our comprehensive consulting and strategic planning services.",
+        f"Trusted business solutions that deliver real results. Partner with us for guaranteed success."
+    ]
+    
+    final_urls = [f"https://{business_name.lower()}.com"]
+    
+    # Use the exact same pattern that worked
+    return await create_responsive_search_ad(
+        customer_id=customer_id,
+        ad_group_resource_name=ad_group_resource_name,
+        headlines=headlines,
+        descriptions=descriptions,
+        final_urls=final_urls
+    )
 
 async def get_smart_recommendations(customer_id: str, goal: str, context: str = "") -> dict[str, Any]:
     """Get AI-powered recommendations based on successful patterns and account context"""
