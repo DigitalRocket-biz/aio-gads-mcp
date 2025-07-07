@@ -1,0 +1,36 @@
+# Environment Variables
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# AI Learning Data (optional - might want to keep for learning)
+ai_learning_context.json
+api_success_log.json
+
+# Documentation cache
+docs_cache/
